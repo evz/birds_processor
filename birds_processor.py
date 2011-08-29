@@ -3,10 +3,11 @@ import requests
 import datetime
 import os
 import time
-from subprocess import call
 from operator import itemgetter
 from hsaudiotag import auto
 import pylast
+from mutagen.easyid3 import EasyID3
+import pympgedit as mpg
 # Use time offset info from url to chop up mp3 and then tag it with info from the table
 pl_url = 'http://www.wnur.org/playlist/playlists/?dj=Joe+G'
 last_fm_api_key = 'da2f492ee9d414260f8ff9e252ab00f3'
@@ -37,7 +38,7 @@ for k,v in podcasts.items():
             pl = sorted(pl, key=itemgetter(0))
             starttime = pl[0][0]
             dirname = '-'.join(k.split('/'))
-            call(['mkdir', podcasts_dir + dirname])
+            os.mkdir(podcasts_dir + dirname)
             tr_start = 0.0
             client = pylast.LastFMNetwork(api_key = last_fm_api_key, api_secret = last_fm_api_secret)
             file_duration =  str(round(int(auto.File(podcasts_dir + v).duration)/60,2))
@@ -52,7 +53,17 @@ for k,v in podcasts.items():
                     else:
                         print 'Found it. It\'s %s minutes long' % str(tr_duration)
                         tr_end = tr_start + tr_duration
-                        call(['mp3splt', podcasts_dir + v, str(tr_start), str(tr_end), '-d ' + dirname, '-g ' + '[@a=' + '"' + tr[1] + '"' + ',@b=' + '"' + tr[3] + '"' + ',@t=' + '"' + tr[2] + '"' + ']'])
+#                        call(['mp3splt', podcasts_dir + v, str(tr_start), str(tr_end), '-d ' + dirname, '-g ' + '[@a=' + '"' + tr[1] + '"' + ',@b=' + '"' + tr[3] + '"' + ',@t=' + '"' + tr[2] + '"' + ']'])
+                        spec = mpg.EditSpec()
+                        spec.append(podcasts_dir + v, str(tr_start)-str(tr_end))
+                        mpg.Index(podcasts_dir + v).index()
+                        out = podcasts_dir + dirname + tr[2] + '.mp3'
+                        mpg.Edit(spec, out).edit()
+                        tagged = EasyID3(out)
+                        tagged['title'] = tr[2]
+                        tagged['artist'] = tr[1]
+                        tagged['album'] = tr[3]
+                        tagged.save()
                         tr_start = tr_end
                 except pylast.WSError, e:
                     print 'Last.fm says: %s ' % e
